@@ -60,10 +60,11 @@ class Synthesizer {
         // Parse only indices related to the |current_phase|.
         const std::vector<Phase>& phases =
             constraint_system_->challenge_phases();
+        size_t write_idx = 0;
         if constexpr (PCS::kSupportsBatchMode) {
           prover->pcs().SetBatchMode(phases.size());
         }
-        for (size_t j = 0; j < phases.size(); ++i) {
+        for (size_t j = 0; j < phases.size(); ++j) {
           if (current_phase != phases[j]) continue;
           const RationalEvals& column = rational_advice_columns[j];
           std::vector<F> evaluated;
@@ -74,7 +75,7 @@ class Synthesizer {
 
           Evals evaluated_evals(std::move(evaluated));
           if constexpr (PCS::kSupportsBatchMode) {
-            prover->BatchCommitAt(evaluated_evals, j);
+            prover->BatchCommitAt(evaluated_evals, write_idx++);
           } else {
             prover->CommitAndWriteToProof(evaluated_evals);
           }
