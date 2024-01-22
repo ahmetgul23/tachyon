@@ -50,6 +50,11 @@ class Synthesizer {
     typename Circuit::Config config =
         Circuit::Configure(empty_constraint_system);
 
+    size_t write_idx = 0;
+    if constexpr (PCS::kSupportsBatchMode) {
+      prover->pcs().SetBatchMode(constraint_system_->num_advice_columns() *
+                                 num_circuits_);
+    }
     for (Phase current_phase : constraint_system_->GetPhases()) {
       for (size_t i = 0; i < num_circuits_; ++i) {
         std::vector<RationalEvals> rational_advice_columns =
@@ -58,16 +63,12 @@ class Synthesizer {
                                     config);
 
         // Parse only indices related to the |current_phase|.
-        const std::vector<Phase>& phases =
-            constraint_system_->challenge_phases();
-        size_t write_idx = 0;
-        if constexpr (PCS::kSupportsBatchMode) {
-          prover->pcs().SetBatchMode(phases.size());
-        }
-        for (size_t j = 0; j < phases.size(); ++j) {
-          if (current_phase != phases[j]) continue;
+        std::vector<Phase> advice_phases =
+            constraint_system_->advice_column_phases();
+        for (size_t j = 0; j < rational_advice_columns.size(); ++j) {
+          if (current_phase != advice_phases[j]) continue;
           const RationalEvals& column = rational_advice_columns[j];
-          std::vector<F> evaluated;
+          std::vector<F> evaluated(column.NumElements());
           CHECK(math::RationalField<F>::BatchEvaluate(column.evaluations(),
                                                       &evaluated));
           // Add blinding factors to advice columns
@@ -82,11 +83,11 @@ class Synthesizer {
           SetAdviceColumn(i, j, std::move(evaluated_evals),
                           prover->blinder().Generate());
         }
-        if constexpr (PCS::kSupportsBatchMode) {
-          prover->RetrieveAndWriteBatchCommitmentsToProof();
-        }
       }
       UpdateChallenges(prover, current_phase);
+    }
+    if constexpr (PCS::kSupportsBatchMode) {
+      prover->RetrieveAndWriteBatchCommitmentsToProof();
     }
   }
 
